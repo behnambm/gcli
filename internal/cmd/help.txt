@@ -1,0 +1,132 @@
+GCLI — read-only Grafana CLI
+============================
+
+gcli reads metrics, logs, SQL and Grafana state from a Grafana instance.
+Works with limited (personal) tokens and full-permission (devops) tokens.
+
+INSTALL
+-------
+  curl -sSL https://github.com/behnambm/gcli/releases/download/latest/install.sh | sh
+
+  Build from source:
+  cd grafana-cli && make install      (builds + installs /usr/local/bin/gcli)
+  or: make build                      (binary at ./gcli)
+  Requires Go 1.27+.
+
+  Update to latest release anytime:
+  gcli update
+
+  Remove the binary:
+  gcli uninstall [--yes]
+
+  Shell completion (bash/zsh/fish):
+  source <(gcli completion bash)      — or `gcli completion zsh` for zsh
+
+SETUP
+-----
+1. Create a service-account token in Grafana:
+   Grafana UI → Administration → Users and access → Service accounts
+   → Add service account → Add token → copy the token (starts with glsa_).
+   (Basic auth with a user/password also works.)
+
+2. Add a profile (interactive, token prompt hidden):
+
+   gcli profiles add prod
+
+   Or non-interactively:
+   gcli profiles add prod --url https://grafana.example.com --token glsa_...
+
+   Profiles live in ~/.config/gcli/profiles.yaml (chmod 600).
+
+3. Verify: gcli profiles test prod   (or: gcli capabilities — what your token can access)
+
+Legacy env vars still work (GRAFANA_URL / GRAFANA_TOKEN) when no profile
+is configured. Selection order: --profile flag > GCLI_PROFILE env >
+default: in profiles.yaml > GRAFANA_URL/GRAFANA_TOKEN env.
+
+PROFILES
+--------
+  gcli profiles add <name> [--url --token | --user --pass]
+                              [--org-id 1] [--default-datasource <ds>] [--set-default]
+  gcli profiles list                    list profiles (secrets never shown)
+  gcli profiles use <name>              set default profile
+  gcli profiles remove <name> [--force] delete a profile
+  gcli profiles test [name]             smoke-test a profile (/api/health)
+
+COMMANDS
+--------
+Query datasources:
+  gcli query <ds> --json '<raw query JSON>'   generic: ANY datasource type,
+                                              raw /api/ds/query object
+                                              (use --json @file.json for big queries)
+  gcli prom <ds> '<promql>' [--step 1m]       Prometheus metrics
+                                              (no --step = instant query)
+  gcli logs <ds> '<logsql>' [--limit 100]     VictoriaLogs logs
+                                              [--mode instant|range|stats]
+  gcli sql <ds> '<sql>' [--from now-24h]      SQL datasources
+                                              ($__timeFrom/$__timeTo macros
+                                              substituted when --from/--to given)
+
+Discover datasources:
+  gcli metrics <ds> [pattern]          metric names (Prometheus-type)
+  gcli labels <ds> [metric]            label names
+  gcli values <ds> <label> [metric]    label values
+  gcli tables <sql-ds>                 SQL tables
+  gcli columns <sql-ds> <table>        SQL table columns
+
+Grafana state:
+  gcli datasources                            list datasources (name, uid, type)
+  gcli dashboards [query]                     search dashboards
+  gcli dashboards --get <uid> [--export f]    full dashboard JSON
+  gcli alerts [--firing]                      current alert states
+  gcli alert <name>                    one alert's full definition + state
+  gcli panels <dashboard-uid> [--queries]   dashboard panel queries
+  gcli annotations [--tags a,b] [--dashboard <uid>]
+  gcli health                                 grafana + per-datasource health
+  gcli version                                grafana version/build
+  gcli capabilities                           per-group permission probe
+  gcli update                                 replace self with latest release
+                                              (progress bar on TTY, 10m default timeout)
+  gcli uninstall [--yes]                      remove the gcli binary
+
+Datasources are referenced by uid or name (case-insensitive):
+  gcli prom Universal 'count(up)'
+  gcli prom 03hIm2zGz 'count(up)'
+
+GLOBAL FLAGS
+------------
+  --url <url>        override GRAFANA_URL
+  --token <token>    override GRAFANA_TOKEN
+  --profile <name>   use profile from profiles.yaml
+  -o, --output       table | json | csv   (default table; json = jq-friendly)
+  --timeout          30s default
+  --no-color         disable ANSI colors
+  -v, --verbose      dump HTTP requests/responses (token redacted)
+  --version          print gcli tool version (git tag, or "dev")
+
+TIME RANGES
+-----------
+Grafana-style: now, now-1h, now-5m, now-1d, now-2w, now-1d/d (day-truncated),
+now/w (start of week), or absolute RFC3339 (2026-08-01T00:00:00Z).
+Default range: now-1h → now (annotations: now-24h → now).
+
+OUTPUT FORMATS
+--------------
+table   aligned columns, local-time timestamps, long strings truncated
+json    {"meta":{...}, "frames":[{refId, columns:[{name, labels, values}]}]}
+csv     first frame only; --frame N for others
+
+EXIT CODES
+----------
+0 success
+1 config error (no profile/URL/token resolvable)
+2 network/HTTP error
+3 HTTP 401 — token invalid, expired, or revoked
+4 HTTP 403/404 — permission denied (or endpoint missing on this Grafana)
+5 query error (per-refId failure from the datasource)
+
+PERMISSIONS
+-----------
+Tokens vary by role. Grafana returns 404 for endpoints the token's role
+cannot see — gcli reports "permission denied" hints for both cases.
+Run `gcli capabilities` to see exactly what your token can do.

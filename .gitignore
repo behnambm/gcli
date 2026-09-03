@@ -1,0 +1,6 @@
+/gcli
+*.test
+coverage.out
+.claude/
+.superpowers/
+.firecrawl/

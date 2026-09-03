@@ -1,0 +1,1 @@
+{"results":{"A":{"status":200,"frames":[{"schema":{"refId":"A","meta":{"typeVersion":[0,0]},"fields":[{"name":"Time","type":"time","typeInfo":{"frame":"time.Time"}},{"name":"Line","type":"string","typeInfo":{"frame":"string"}},{"name":"labels","type":"other","typeInfo":{"frame":"json.RawMessage"}}]},"data":{"values":[[1],[2],[3]]}}]}}}

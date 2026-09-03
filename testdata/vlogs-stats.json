@@ -1,0 +1,1 @@
+{"results":{"A":{"status":200,"frames":[{"schema":{"name":"rows","refId":"A","fields":[{"name":"Time","type":"time","typeInfo":{"frame":"time.Time"}},{"name":"Value","type":"number","typeInfo":{"frame":"float64"},"labels":{"__name__":"rows"},"config":{"displayNameFromDS":"rows"}}]},"data":{"values":[[1],[2]]}}]}}}

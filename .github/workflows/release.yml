@@ -1,0 +1,68 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  SHORT_SHA: ${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: make test
+
+      - name: Vet
+        run: make vet
+
+      - name: Build binaries
+        run: |
+          for target in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+            GOOS="${target%-*}" GOARCH="${target#*-}" CGO_ENABLED=0 \
+              make build VERSION="${SHORT_SHA:0:8}"
+            mv gcli "gcli-$target"
+          done
+
+      - name: Checksums
+        run: sha256sum gcli-* > checksums.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            gcli-*
+            checksums.txt
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency: latest-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+
+      - name: Replace latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "latest (${SHORT_SHA:0:8})" \
+            --notes "Rolling pre-release for commit [${SHORT_SHA:0:8}](https://github.com/behnambm/gcli/commit/$GITHUB_SHA). Install: \`curl -sSL https://github.com/behnambm/gcli/releases/download/latest/install.sh | sh\`" \
+            gcli-* checksums.txt install.sh
